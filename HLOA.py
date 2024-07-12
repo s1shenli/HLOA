@@ -1,9 +1,47 @@
 import numpy as np
+import pandas as pd
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import classification_report,accuracy_score
 
 """
-对该算法在特征选择上的应用，需要对算法进行一定的修改，使其能够适应特征选择的问题
+HLOA算法的二进制版本
+
+1、主要是用我设定的第三种办法来将该算法应用于特征选择问题，也即生成连续数据的初始种群，
+2、计算完毕后转换为二进制数据，根据二进制数据进行特征选取然后进行目标函数计算；
+3、目标函数计算完毕后，根据情况判定最佳和最差，然后继续用其对应的连续数据进行计算。
+备注：也就是说，只有连续数据转二进制这一步，根据二进制进行特征选择，然后计算还是用对应的连续数据
+备注：再说具体一点，就是每个搜索代理对应两个数据，一个连续的一个离散的，离散的是根据连续的内容生成的，计算是用连续的，特征选择是用离散的
+4、输入[0,2π]，输出[0,1]，再输入需要加入一个修正公式（y=x*2π，其实并不是线性关系，但先按线性处理），让[0,1]再次变成[0,2π]，才能保证迭代正常
 """
 
+def data_Processing(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限NSL-KDD数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename)
+    # 去除列名中的特殊字符：单双引号以及空格
+    df = df.rename(columns=lambda x: x.replace("'", "").replace('"', '')).replace(" ", "")
+    # print(df.columns)
+    df_data = df.iloc[:, 5:-1]  # 先将1至4列非数特征值搁置，稍后再处理,从第5列到倒数第二列
+    df_targetNonnumerical = df.iloc[:, -1]#选取所有行的最后一列，
+    standard = 'normal'
+    df_targetNumerical = []
+    for i in range(len(df_targetNonnumerical)):
+        if df_targetNonnumerical[i] == standard:
+            df_targetNumerical.append(1)
+        elif df_targetNonnumerical[i] != standard:
+            df_targetNumerical.append(0)
+    df_target = df_targetNumerical
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    #print(df_data)
+    #print(df_target)
+    return df_data, df_target
 
 def Initialization(search_agents, dim, ub, lb):
     """
@@ -25,6 +63,100 @@ def Initialization(search_agents, dim, ub, lb):
             positions[:, i] = np.random.rand(search_agents) * (ub_i - lb_i) + lb_i
     return positions
 
+def sigmoidChange(position):
+    """
+    将传入位置矩阵，用sigmoid函数计算，然后返回对应行列数的新矩阵
+    :param position:传入的位置矩阵
+    :return:使用sigmoid函数计算后的新矩阵
+    """
+    # if position.ndim == 2:
+    #     newArrary = np.zeros((position.shape[0], position.shape[1]))
+    #     for i in range(position.shape[0]):
+    #         for j in range(position.shape[1]):
+    #             newArrary[i, j] = 1
+    # elif position.ndim == 1:
+    #     newArrary = np.zeros((len(position)))
+    #     for i in range(len(position)):
+    #         newArrary[i] = 1
+    return 1/(1+np.exp(-position))
+
+def euclideanDistance(position1,position2):
+    """
+    根据传入的两个矩阵，计算他们相对应位置的两个数的欧氏距离，
+    将对应计算完成的存放欧氏距离的矩阵返回
+    :param position1: 传入np.arrary矩阵1
+    :param position2:传入np.arrary矩阵2
+    :return:一个存放欧氏距离的矩阵
+    """
+
+    #先判断两个矩阵的尺寸
+    if position1.shape!=position2.shape:
+        raise SystemExit("传入矩阵尺寸不相符，无法计算，出错函数euclideanDistance")
+    if position1.ndim==2:
+        euclideanDistanceArrary=np.zeros((position1.shape[0],position1.shape[1]))
+        for i in range(position1.shape[0]):
+            for j in range(position1.shape[1]):
+                euclideanDistanceArrary[i,j]=np.sqrt(np.sum((position1[i,j]-position2[i,j])**2))
+    elif position1.ndim==1:
+        euclideanDistanceArrary = np.zeros((len(position1)))
+        for i in range(len(position1)):
+            euclideanDistanceArrary[i] = np.sqrt(np.sum((position1[i]-position2[i])**2))
+
+    euclideanDistanceArrary=np.array(euclideanDistanceArrary)
+    print(f"欧式距离为：{euclideanDistanceArrary}")
+    #print(type(euclideanDistanceArrary))
+    return euclideanDistanceArrary
+
+
+def continuous_to_discreate(position,judgementCriteria=0):
+    """
+    生成search_agents行dim列的二进制数组，且其数据是根据对应种群生成
+    也就是前面提到的，每个搜索代理对应的离散数据
+    每迭代一次都需要进行连续数据二进制化
+    :param position:种群矩阵
+    :param judgementCriteria:比其小则取0，大则取1，默认值是1
+    :return:返回一个离散矩阵，尺寸和position对应
+    """
+    # search_agents=position.shape[0]
+    # dim=position.shape[1]
+
+    #下面是计算位置对应的sigmoid函数值
+    # position=sigmoidChange(position)
+    if position.ndim==2:
+        binaryArrary=np.zeros((position.shape[0],position.shape[1]))
+        for i in range(position.shape[0]):
+            for j in range(position.shape[1]):
+                if position[i,j]>judgementCriteria:
+                    binaryArrary[i,j]=1
+                else:
+                    binaryArrary[i,j]=0
+    elif position.ndim==1:
+        binaryArrary = np.zeros((len(position)))
+        for i in range(len(position)):
+                if position[i] > judgementCriteria:
+                    binaryArrary[i] = 1
+                else:
+                    binaryArrary[i] = 0
+    # 判断特征选择是否全为0，如果是则随机生成一个列表
+    if (binaryArrary==0).all():
+        print(f"因为binaryArrary:{binaryArrary}全部是0，所以产生新的随机向量")
+        length=len(binaryArrary)
+        binaryArrary=np.random.randint(0,2,size=length).tolist()
+    print(f"binaryArrary:{binaryArrary},{type(binaryArrary)}")
+    return binaryArrary
+
+def modified_formula(positions):
+    """
+    输入[0,2π]，输出[0,1]，再输入需要加入一个修正公式（本次选用y=x*2π），
+    让[0,1]再次变成[0,2π]，才能保证迭代正常，目前来说暂时用不到
+    :param positions: 一轮迭代计算完的位置矩阵
+    :return: 修正之后的位置矩阵
+    """
+    position_aftermodified=np.zeros((positions.shape[0],positions.shape[1]))
+    for i in range(positions.shape[0]):
+        for j in range(positions.shape[1]):
+            position_aftermodified[i,j]=positions[i,j]*2*np.pi
+    return position_aftermodified
 
 def randomGenerate(search_agents):
     """
@@ -113,7 +245,7 @@ def mimicry(Xbest, X, Max_iter, SearchAgents, t):
     """
     实现角蜥蜴的伪装策略，也即隐蔽策略
     :param Xbest:第t次的最好的搜索代理
-    :param X:搜索代理本次的位置
+    :param X:当前的位置矩阵，全部信息
     :param Max_iter:最大迭代次数
     :param SearchAgents:搜索代理的数量
     :param t:当前迭代次数
@@ -128,8 +260,7 @@ def mimicry(Xbest, X, Max_iter, SearchAgents, t):
     r1, r2, r3, r4 = randomGenerate(SearchAgents)
     c1, c2 = getColor(colorPalette)
     Xnext = Xbest + (Delta - Delta * t / Max_iter) * (c1 * (np.sin(X[r1, :]) - np.cos(X[r2, :])) \
-                                                      - ((-1) ** getBinary()) * c2 * np.cos(X[r3, :]) - np.sin(
-                X[r4, :]))
+                                                      - ((-1) ** getBinary()) * c2 *(np.cos(X[r3, :]) - np.sin(X[r4, :])))
     return Xnext
 
 
@@ -137,7 +268,7 @@ def Skin_darkening_or_lightening(Xbest, X, SearchAgents):
     """
     实现角蜥蜴皮肤的变量和变暗策略
     :param Xbest:找到的最好代理
-    :param X:目前的种群矩阵或者说搜索代理矩阵
+    :param X:搜索代理矩阵，包含全部信息
     :param SearchAgents:搜索代理数量
     :return:找到的最差的代理
     """
@@ -167,19 +298,18 @@ def shootBloodstream(Xbest, X, Max_iter, t):
     """
     实现角蜥蜴的血液射击策略
     :param Xbest:第t次的最好的搜索代理
-    :param X:  搜索代理本次的位置
+    :param X:  本轮循环的搜索代理
     :param Max_iter: 最大迭代次数
     :param t:当前迭代次数
     :return:第t+1次最新的代理搜索位置，也就是说返回一个1行dim列的向量
     """
-    g = 0.009807  # 9.807 m/s2  
+    g = 0.009807  # 9.807 m/s2
     epsilon = 1E-6
     Vo = 1  # 1E-2
     Alpha = np.pi / 2
 
     Xnext = (Vo * np.cos(Alpha * t / Max_iter) + epsilon) * Xbest + \
             (Vo * np.sin(Alpha - Alpha * t / Max_iter) - g + epsilon) * X
-
     return Xnext
 
 
@@ -187,7 +317,7 @@ def randomWalk(Xbest, X):
     """
     实现角蜥蜴的随机行走策略
     :param Xbest:第t次的最好的搜索代理
-    :param X:当前搜索代理的位置
+    :param X:本轮循环的搜索代理
     :return:第t+1次最新的代理搜索位置，也就是说返回一个1行dim列的向量
     """
     e = CauchyRand(0, 1)
@@ -226,109 +356,162 @@ def remplaceSearchAgent(Xbest, X, SearchAgents_no):
     return Xnew
 
 
-def helper_fun(x, aSH_i, cSH_i):
-    return -((x - aSH_i) @ (x - aSH_i) + cSH_i) ** -1
 
-
-def get_function(F):
+def fitness(binaryArrary_row,errorRate,a=0.5,b=0.5):
     """
-    根据F的值，返回对应下界，上界，维度和目标函数
-    :param F:需要计算的目标函数的编号
-    :return:与F对应的下界，上界，维度和目标函数
+    目标函数，作用就是找出令该目标函数取最小值的解，每个搜索代理都需要计算一次
+    :param binaryArrary_row:需要计算的搜索代理对应的那一行的二进制向量，也就是一个1行dim列的数组
+    :param errorRate:该行特征向量训练之后，再进行预测测试得到的错误率
+    :param a:计算目标函数时错误率的权重值，初始0.5
+    :param b:计算目标函数时选择特征数量/全部特征数量比值的权重，初始0.5
+    :return:返回计算好的目标函数
     """
-    aSH = np.array([[4, 4, 4, 4], [1, 1, 1, 1], [8, 8, 8, 8], [6, 6, 6, 6],
-                    [3, 7, 3, 7], [2, 9, 2, 9], [5, 5, 3, 3], [8, 1, 8, 1],
-                    [6, 2, 6, 2], [7, 3.6, 7, 3.6]])
-    cSH = np.array([0.1, 0.2, 0.2, 0.4, 0.4, 0.6, 0.3, 0.7, 0.5, 0.5])
-    switcher = {
-        1: lambda x: sum(x ** 2),  # F1
-        2: lambda x: sum(abs(x)) + np.prod(abs(x)),  # F2
-        3: lambda x: sum([sum(x[:i + 1]) ** 2 for i in range(len(x))]),  # F3
-        4: lambda x: max(abs(x)),  # F4
-        5: lambda x: sum(100 * (x[i + 1] - x[i] ** 2) ** 2 + (x[i] - 1) ** 2 for i in range(len(x) - 1)),  # F5
-        6: lambda x: sum(abs(x + 0.5) ** 2),  # F6
-        7: lambda x: sum([(i + 1) * (x[i] ** 4) for i in range(len(x))]) + np.random.randn(),  # F7
-        8: lambda x: sum(-x * np.sin(np.sqrt(abs(x)))),  # F8
-        23: lambda x: sum(helper_fun(x, aSH_i, cSH_i) for aSH_i, cSH_i in zip(aSH, cSH))
-    }
+    selectfeature=0
+    # for element in binaryArrary_row:
+    #     if element==1:
+    #         selectfeature=selectfeature+1
+    selectfeature=np.sum(binaryArrary_row)
+    #print(f"selectfeature={selectfeature}")
+    return a*errorRate+b*(selectfeature/len(binaryArrary_row))
 
-    # 从switcher中获取F对应的函数，如果没有就返回一个字符串
-    fobj = switcher.get(F, lambda x: "Invalid function called")
 
-    boundaries_and_dims = {
-        1: (-100, 100, 30),
-        2: (-10, 10, 30),
-        3: (-100, 100, 30),
-        23: (0, 10, 4),
-    }
 
-    # 从boundaries_and_dims中获取F对应的下界，上界和维度，如果没有就返回标识字符串与对应的fobj内容
-    result = boundaries_and_dims.get(F)
-    if result is None:
-        return "Invalid function identifier", "Invalid range", "Invalid dimension", fobj
-    lb, ub, dim = result
-    lb = np.array([lb])
-    ub = np.array([ub])
-    return lb, ub, dim, fobj
-
-def feature_selection():
+def feature_selection(binaryArray_row,train_data):
     """
-    需要实现对数据集进行角蜥蜴优化算法的特征选择
-    对参数的使用以及返回值，尽可能和前面的函数保持一致，所用测试模型就用sklearn中的基础模型
-    （以特征值的个数作为dim，lb和ub就是0和1，公式是针对连续数据的，离散数据需要进行修改，现在的
-    工作重心就是找到合适的公式，以角蜥蜴算法的思路对离散数据进行处理）
-    :return:
+    根据传入的二进制解向量，在训练数据中选择特征，然后将选择后的特征返回
+    :param binaryArray_row:传入一个二进制解向量，也就是一行dim列的向量
+    :param train_data:传入完整的训练集
+    :return:返回选择好的训练集
     """
-    pass
+    feature_number=0
+    feature_selected=[]
+    feature_selected_index=[]
+    if len(binaryArray_row) != train_data.shape[1]:
+        print(f"解向量的维数{len(binaryArray_row)}和数据的列数{train_data.shape[1]}不相同")
+        return
+    #先搞个中间列表，记录下来哪些列被选中，然后再根据记录列表来挑选特征
+    for i in range(train_data.shape[1]):
+        if binaryArray_row[i]==1:
+            feature_selected_index.append(i)
+            feature_number=feature_number+1
+    for row in train_data:
+        feature=[row[index] for index in feature_selected_index]
+        feature_selected.append(feature)
 
-def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, fobj):
+    #print(feature_selected)
+    #print(type(feature_selected))
+    feature_selected=np.array(feature_selected)
+    #print(feature_selected)
+    #print(type(feature_selected))
+    return feature_selected
+
+
+
+def HLOA(SearchAgents_no, Max_iter, lb, ub, dim,judgementCriteria,a,filename_train,filename_test):
     """
     实现角蜥蜴优化算法
-    :param SearchAgents_no:
-    :param Max_iter:
-    :param lb:
-    :param ub:
-    :param dim:
-    :param fobj:
+    :param SearchAgents_no:搜索代理的数量
+    :param Max_iter:最大迭代次数
+    :param lb:下届
+    :param ub:上界
+    :param dim:问题纬度
+    :param judgementCriteria:二进制转换的标准
+    :param a:适应度函数中错误率对应的权重，特征数量的权重为1-a
+    :param filename_train:用到的训练集
+    :param filename_test:用到的测试集
     :return:
     """
 
     # 初始化搜索代理的位置，行数是搜索代理的数量SearchAgents_no，列数是搜索空间的维度dim
     Positions = Initialization(SearchAgents_no, dim, ub, lb)
+    print(f"positons={Positions}")
+    #生成搜索代理对应的二进制矩阵，因为第一轮矩阵没有对应的前代，无法计算欧氏距离，所以直接转化
+    binaryArrary=continuous_to_discreate(Positions,0)
+    #先进行一遍训练加测试，计算出目标函数以及最好最差
+    train_data, train_target=data_Processing(filename_train)
+    test_data, test_target = data_Processing(filename_test)
+    Fitness=[]#存储目标函数值的数组
+    #这是整个迭代算法的第一步，方法一可以用全部训练集进行训练，方法二进行特征选择，选择完进行训练
+    #因为要找到最佳和最差代理，所以只能用第二个方法
+    for row in binaryArrary:
+        #对训练集和测试集进行特征选择
+        train_data_selected=feature_selection(row,train_data)
+        test_data_selected=feature_selection(row,test_data)
+        #接下来开始训练，开始测试
+        knn=KNeighborsClassifier(n_neighbors=5)
+        knn.fit(train_data_selected,train_target)
+        y_predict=knn.predict(test_data_selected)
+        error_rate=1-accuracy_score(test_target,y_predict)
+        #print(f"error_rate={error_rate}")
+        #接下来开始计算适应度的值（即目标函数值）
+        Fitness.append(fitness(row,error_rate,a,1-a))
+        print(f"feature_number={train_data_selected.shape[1]}")
+        print(f"error_rate={error_rate}")
 
-    # 每个搜索代理的适应度值（即目标函数值）
-    Fitness = np.array([fobj(Positions[i, :]) for i in range(SearchAgents_no)])
-
+    print(f"Fitness={Fitness}")
+    Fitness=np.array(Fitness)
     vMin_idx = np.argmin(Fitness)  # 返回最小值的索引
     vMin = Fitness[vMin_idx]
     theBestVct = Positions[vMin_idx, :]  # 将最小值定为最好的搜索代理
-
+    #print(f"theBestVct={theBestVct}")
     vMax_idx = np.argmax(Fitness)  # 返回最大值的索引，且是最差的搜索代理
     Convergence_curve = np.zeros(Max_iter)
-    Convergence_curve[0] = vMin  # 收敛曲线，记录每一轮的最佳值，用于分析
-    # print(f'Fitness: {Fitness}')
-    alphaMelanophore = alpha_melanophore(Fitness, vMin, Fitness[vMax_idx])
+    Convergence_curve[0] = vMin  # 收敛曲线，记录每一轮的最佳值，也就是目标函数最小值，用于分析
 
-    for t in range(1, Max_iter):
+    alphaMelanophore = alpha_melanophore(Fitness, Fitness[vMin_idx], Fitness[vMax_idx])
+    #alphaMelanophore注定会有一个1一个0,1是fit[i]取到min，0是fit[i]取到max
+    print(f"alphaMelanophore={alphaMelanophore}")
+    #下列大循环就是迭代过程
+    for t in range(1, Max_iter+1):
+        #这个小循环每次迭代过程中，每个搜索代理进行的算法计算
+        print(f"第{t}轮迭代中")
         for r in range(SearchAgents_no):
+            print(f"第{r+1}个代理")
             if np.random.rand() > 0.5:  # 50%的概率，执行伪装策略或者血液射击与随机行走策略
                 v = mimicry(theBestVct, Positions, Max_iter, SearchAgents_no, t)
+                print(f"进入了伪装策略")
             else:
                 if t % 2 == 0:  # 若迭代次数是偶数，执行血液射击策略
                     v = shootBloodstream(theBestVct, Positions[r, :], Max_iter, t)
+                    print(f"执行了血液射击策略")
                 else:  # 若迭代次数是奇数，执行随机行走策略
                     v = randomWalk(theBestVct, Positions[r, :])
-
+                    print(f"执行了随机行走策略")
+            #这一步将最差的代理进行替换计算
             Positions[vMax_idx, :] = Skin_darkening_or_lightening(theBestVct, Positions, SearchAgents_no)
-
+            print(f"最差是第{vMax_idx+1}个代理，执行皮肤变化策略")
             if alphaMelanophore[r] <= 0.3:
+                #print(f"第{r+1}个alphaMelanophore值是{alphaMelanophore[r]}，执行替换逃离策略")
                 v = remplaceSearchAgent(theBestVct, Positions, SearchAgents_no)
 
-            v = checkBoundaries(v, lb, ub)
+            #v = checkBoundaries(v, lb, ub)
+            #以上已经确定好了一个搜索代理
+            #接下来计算新的搜索代理的适应度函数
+            #print(v)
+            #先将得到的新代理二进制化，这个临界值有待商榷
+            print(f"第{t}轮迭代中的，第{r + 1}个代理是：{v}")
 
-            Fnew = fobj(v)
-            # print(f'Fnew: {Fnew}')
-            # print(f'Fitness[r]: {Fitness[r]}')
+            #下面代码计算欧氏距离并转换二进制版本
+            v_euclideanDistance=euclideanDistance(v,Positions[r,:])
+            v_binary=continuous_to_discreate(v_euclideanDistance,judgementCriteria)
+
+            #下面代码利用sigmoid函数转化二进制版本
+            # v_binary=continuous_to_discreate(v,0)
+
+            #用得到的二进制进行特征选择，然后训练并计算适应度函数
+            train_data_selected = feature_selection(v_binary, train_data)
+            test_data_selected = feature_selection(v_binary, test_data)
+            # 接下来开始训练，开始测试
+            knn = KNeighborsClassifier(n_neighbors=5)
+            knn.fit(train_data_selected, train_target)
+            y_predict = knn.predict(test_data_selected)
+            error_rate = 1 - accuracy_score(test_target, y_predict)
+            # 接下来开始计算适应度的值（即目标函数值）
+            Fnew =fitness(v_binary, error_rate, a, 1-a)
+
+            #接下来需要对新的搜索代理进行公式修正，以免其数值收敛于0
+
+
             if Fnew <= Fitness[r]:
                 Positions[r, :] = v
                 Fitness[r] = Fnew
@@ -337,51 +520,81 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, fobj):
                 theBestVct = v
                 vMin = Fnew
 
+            print(f"feature_number={train_data_selected.shape[1]}")
+            print(f"error_rate={error_rate}")
+            print(f"fnew={Fnew}")
+            print(f"Fitness={Fitness}")
+            print('   ')
+
         vMax_idx = np.argmax(Fitness)
         alphaMelanophore = alpha_melanophore(Fitness, vMin, Fitness[vMax_idx])
-        Convergence_curve[t] = vMin
+        Convergence_curve[t-1] = vMin
+
+    print(f"Convergence_curve={Convergence_curve}")
+    print(f"vMin={vMin}")
+    print(f"theBestVct={theBestVct}")
 
     return vMin, theBestVct, Convergence_curve
 
 
-def operateHLOA():
-    ## number of executions
-    i = 30
-    a = np.zeros(i)
-    SearchAgents_no = 30
-    Function_name = 1
-    Max_iteration = 200
-
-    lb, ub, dim, fobj = get_function(Function_name)
-
-    v = np.zeros((i, dim))
-    cc = np.zeros((i, Max_iteration))  # convergence curve
-
-    for m in range(i):
-        print(f'Run: {m + 1}')
-        vMin, theBestVct, Convergence_curve = HLOA(SearchAgents_no, Max_iteration, lb, ub, dim, fobj)
-        a[m] = vMin  # the best fitness for the m-Run
-        v[m, :] = theBestVct  # the best vector (variables) for the m-Run
-        cc[m, :] = Convergence_curve  # convergence curve fot the m-Run
-
-    vMin_idx = np.argmin(a)
-    theBestVct = v[vMin_idx, :]
-    ConvergenceC = cc[vMin_idx, :]
-
-    print(f'The best solution obtained by HLOA is: {theBestVct}')
-    print(f'The best fitness (min f(x)) found by HLOA is: {vMin}')
-    print(f'# runs: {i}')
-    print(f'Mean:  {np.mean(a)}')
-    print(f'Std.Dev:  {np.std(a)}')
-
-
 if __name__ == "__main__":
-    # search_agents_no = 10  # Number of search agents
-    # dim = 3  # Dimensionality of the search space
-    # ub = np.array([10.0])  # Upper bounds for each dimension
-    # lb = np.array([0.0, 0.0, 0.0])  # Lower bounds for each dimension
-    #
-    # # Call the initialization function
-    # positions = Initialization(search_agents_no, dim, ub, lb)
-    # print(positions)
-    operateHLOA()
+    print(f"运行程序来自HLOA_Binary.py")
+    ub=np.array([20])
+    lb=np.array([-20])
+    # pos1=Initialization(10,6,ub,lb)
+    # pos2=np.array([[1,1,2],[10,20,30],[5,6,7],[19,20,21]])
+
+    HLOA(10,30,lb,ub,37,10,0.6,'KDDTrain+.csv','KDDTest+.csv')
+
+    # xnext = np.array([1,2,3,4,5,6])
+    # xbest=np.array([-14,-8,-2,4,10,16])
+    # x_arrary1=[]
+    # x_arrary2 =[]
+    # x_arrary3 = []
+    # x_arrary4 = []
+    # x_arrary5 = []
+    # x_arrary6 = []
+    # x_1 = []
+    # x_2 = []
+    # x_3 = []
+    # x_4 = []
+    # x_5 = []
+    # x_6 = []
+    # for t in range(10):
+    #     for i in range(30):
+    #         #print(xnext)
+    #         #xnext=mimicry(xbest,pos1,15,10,i)
+    #         #xnext=shootBloodstream(xbest,xnext,30,i)
+    #         xnext=randomWalk(xbest,xnext)
+    #         #xnext=Skin_darkening_or_lightening(xbest,pos1,10)
+    #         x_arrary1.append(xnext[0])
+    #         x_arrary2.append(xnext[1])
+    #         x_arrary3.append(xnext[2])
+    #         x_arrary4.append(xnext[3])
+    #         x_arrary5.append(xnext[4])
+    #         x_arrary6.append(xnext[5])
+    #         #xnext=remplaceSearchAgent(pos2[1,:],pos2,3)
+    #     x_1.append(np.std(x_arrary1))
+    #     x_2.append(np.std(x_arrary2))
+    #     x_3.append(np.std(x_arrary3))
+    #     x_4.append(np.std(x_arrary4))
+    #     x_5.append(np.std(x_arrary5))
+    #     x_6.append(np.std(x_arrary6))
+    # x_1 = np.array(x_1)
+    # x_2 = np.array(x_2)
+    # x_3 = np.array(x_3)
+    # x_4 = np.array(x_4)
+    # x_5 = np.array(x_5)
+    # x_6 = np.array(x_6)
+    # print(f"x1迭代10次的标准差x_1为：{x_1}")
+    # print(f"x2迭代10次的标准差x_2为：{x_2}")
+    # print(f"x3迭代10次的标准差x_3为：{x_3}")
+    # print(f"x4迭代10次的标准差x_4为：{x_4}")
+    # print(f"x5迭代10次的标准差x_5为：{x_5}")
+    # print(f"x6迭代10次的标准差x_6为：{x_6}")
+    # print(f"x_1的平均值为：{np.mean(x_1)}")
+    # print(f"x_2的平均值为：{np.mean(x_2)}")
+    # print(f"x_3的平均值为：{np.mean(x_3)}")
+    # print(f"x_4的平均值为：{np.mean(x_4)}")
+    # print(f"x_5的平均值为：{np.mean(x_5)}")
+    # print(f"x_6的平均值为：{np.mean(x_6)}")
