@@ -2,6 +2,12 @@ import random
 import numpy as np
 import pandas as pd
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn import tree
+from sklearn.svm import LinearSVC,SVC
+from sklearn.naive_bayes import GaussianNB
+from sklearn.linear_model import Perceptron
+from sklearn.ensemble import RandomForestClassifier,ExtraTreesClassifier,AdaBoostClassifier
+from sklearn.ensemble import BaggingClassifier,VotingClassifier
 from sklearn.metrics import classification_report, accuracy_score
 import logging
 
@@ -522,7 +528,7 @@ def feature_selection(binaryArray_row, train_data):
     return feature_selected
 
 
-def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_train, filename_test,logger):
+def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_train, filename_test,logger,clf):
     """
     实现角蜥蜴优化算法
     :param SearchAgents_no:搜索代理的数量
@@ -535,6 +541,7 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
     :param filename_train:用到的训练集
     :param filename_test:用到的测试集
     :param logger:记录的logger函数
+    :param clf:传入的训练和预测使用的模型
     :return:
     """
 
@@ -554,9 +561,14 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
         train_data_selected = feature_selection(row, train_data)
         test_data_selected = feature_selection(row, test_data)
         # 接下来开始训练，开始测试
-        knn = KNeighborsClassifier(n_neighbors=5)
-        knn.fit(train_data_selected, train_target)
-        y_predict = knn.predict(test_data_selected)
+        # 下面是用knn计算的
+        # clf = KNeighborsClassifier(n_neighbors=5)
+
+        #下面是决策树
+        #clf=tree.DecisionTreeClassifier(random_state=0)
+
+        clf.fit(train_data_selected, train_target)
+        y_predict = clf.predict(test_data_selected)
         error_rate = 1 - accuracy_score(test_target, y_predict)
         # print(f"error_rate={error_rate}")
         # 接下来开始计算适应度的值（即目标函数值）
@@ -617,9 +629,14 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
             train_data_selected = feature_selection(v_binary, train_data)
             test_data_selected = feature_selection(v_binary, test_data)
             # 接下来开始训练，开始测试
-            knn = KNeighborsClassifier(n_neighbors=5)
-            knn.fit(train_data_selected, train_target)
-            y_predict = knn.predict(test_data_selected)
+            #下面是用knn进行计算的
+            #knn = KNeighborsClassifier(n_neighbors=5)
+
+            #下面是用决策树进行计算
+            #clf=tree.DecisionTreeClassifier(random_state=0)
+
+            clf.fit(train_data_selected, train_target)
+            y_predict = clf.predict(test_data_selected)
             error_rate = 1 - accuracy_score(test_target, y_predict)
             # 接下来开始计算适应度的值（即目标函数值）
             Fnew = fitness(v_binary, error_rate, a, 1 - a)
@@ -666,13 +683,32 @@ if __name__ == "__main__":
     ub = np.array([20])
     lb = np.array([-20])
     #pos1=Initialization(4,6,ub,lb)
-    pos2=np.array([[1,1,2],[10,20,30],[5,6,7],[19,20,21]])
-    pos3=np.array([7,6,5,4,3,1])
-    # for i in range(9):
-    #     logger.info(f"第{i+1}次实验")
-    HLOA(10, 30, lb, ub, 37, 7.5, 0.6, 'KDDTrain+.csv', 'KDDTest+.csv',logger)
+    # pos2=np.array([[1,1,2],[10,20,30],[5,6,7],[19,20,21]])
+    # pos3=np.array([7,6,5,4,3,1])
+    # 下面是用knn进行计算的
+    clf = KNeighborsClassifier(n_neighbors=1)
+    # 下面是用决策树进行计算
+    # clf=tree.DecisionTreeClassifier(random_state=0)
+    # 下面是用线性支持向量机
+    # clf=LinearSVC(dual=False,random_state=0)
+    #下面使用朴素贝叶斯高斯模型
+    # clf=GaussianNB()
+    # 下面使用感知器模型
+    # clf=Perceptron(random_state=0)
+    # 下面使用随机森林模型
+    # clf=RandomForestClassifier(min_samples_split=5,min_samples_leaf=10)
+    # 下面使用极端随机树
+    # clf=ExtraTreesClassifier()
+    # 下面使用adaboost模型
+    # clf=AdaBoostClassifier(n_estimators=100,random_state=0)
+    # 下面使用bagging模型
+    # clf=BaggingClassifier(n_estimators=100,random_state=0)
+    for i in range(1):
+        logger.info(f"第{i+1}次实验")
+        HLOA(10, 30, lb, ub, 37, 15, 0.99, 'KDDTrain+.csv', 'KDDTest+.csv',logger,clf)
+
     # results=continuous_to_discreate(pos3,5)
     # print(f"results:{results}")
-    
+
 
 
