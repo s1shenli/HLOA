@@ -1,6 +1,8 @@
 import random
+import os
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn import tree
 from sklearn.svm import LinearSVC,SVC
@@ -33,8 +35,25 @@ HLOA算法的二进制版本改进版本1
 以上三个问题，可以在该版本中进行尝试实现，并进行结果实验
 """
 
+def data_Processing_split(filename,trainProportion=0.8):
+    """
+    用来将一个完整的数据，按照输入的比例，分成两份数据，并以csv文件的形式保存下来
+    :param filename: 需要拆分的文件名
+    :param trainProportion: 拆分的训练集数据的比例
+    :return: 返回训练集+测试集的名字
+    """
+    df=pd.read_csv(filename)
+    split_index=int(len(df)*trainProportion)
+    train_df=df.iloc[:split_index]
+    test_df=df.iloc[split_index:]
+    filename_without_ext = os.path.splitext(filename)[0]
+    name_train=f"{filename_without_ext}_train.csv"
+    name_test=f"{filename_without_ext}_test.csv"
+    train_df.to_csv(name_train,index=False)
+    test_df.to_csv(name_test, index=False)
+    return name_train,name_test
 
-def data_Processing(filename):
+def data_Processing_NSL_KDD(filename):
     """
     将原始数据处理成sklearn能用的数据形式，仅限NSL-KDD数据集，其他数据集格式不对
     需要重新写代码
@@ -63,6 +82,62 @@ def data_Processing(filename):
     # print(df_target)
     return df_data, df_target
 
+def data_Processing_arrhythmia(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限arrhythmia数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename,header=None)
+    #df.to_csv("处理之前.csv", index=False)
+
+    #df['is_abnormal'] = (df['data_column'] == '?').astype(int)#创建一个新列来标记异常值：1表示异常，0表示正常
+
+    # 遍历每一列，替换非数值数据为NaN
+    for column in df.columns:
+        df[column] = pd.to_numeric(df[column], errors='coerce')
+
+    for col in df.columns:
+        # print(df[col])
+        mean_value = df[col].mean()  #计算当前列的平均值，忽略NaN
+        # print(mean_value)
+        df[col].fillna(mean_value, inplace=True)  #替换NaN值为平均值
+    #df.to_csv("处理之后.csv", index=False)
+
+    # for col_idx in range(df.shape[1]):
+    #     # 将?替换为NaN，以便计算平均值时可以忽略它们
+    #     df.iloc[:, col_idx] = df.iloc[:, col_idx].replace('?', np.nan)
+    #
+    #     # 计算该列（忽略NaN）的平均值
+    #     mean_value = df.iloc[:, col_idx].mean(skipna=True)
+    #
+    #     # 如果平均值是NaN（即该列全为NaN），则可以选择一个默认值（如0），或者根据具体情况处理
+    #     if pd.isna(mean_value):
+    #         mean_value = 0  # 或者其他你认为合适的默认值
+    #
+    #     # 将NaN替换为计算出的平均值
+    #     df.iloc[:, col_idx].fillna(mean_value, inplace=True)
+
+
+
+    df_data = df.iloc[:, :-1]
+    df_targetNonnumerical = df.iloc[:, -1]  # 选取所有行的最后一列，
+    standard = 1
+    df_targetNumerical = []
+    for i in range(len(df_targetNonnumerical)):
+        if df_targetNonnumerical[i] == standard:
+            df_targetNumerical.append(1)
+        elif df_targetNonnumerical[i] != standard:
+            df_targetNumerical.append(0)
+    df_target = df_targetNumerical
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    # print(df_data)
+    # print(df_target)
+    return df_data, df_target
 
 def Initialization(search_agents, dim, ub, lb):
     """
@@ -127,7 +202,7 @@ def euclideanDistance(position1, position2,logger):
             euclideanDistanceArrary[i] = np.sqrt(np.sum((position1[i] - position2[i]) ** 2))
 
     euclideanDistanceArrary = np.array(euclideanDistanceArrary)
-    logger.info(f"欧式距离为：{euclideanDistanceArrary}")
+    # logger.info(f"欧式距离为：{euclideanDistanceArrary}")
     # print(type(euclideanDistanceArrary))
     return euclideanDistanceArrary
 
@@ -209,7 +284,8 @@ def continuous_to_discreate(position,logger, judgementCriteria=0):
 
     #下面实现的是方法2中的第一个方法,对欧氏距离使用聚类k-means，k=2的思路做一个简单的二分类
     if (binaryArrary == 0).all():
-        logger.info(f"因为binaryArrary:{binaryArrary}全部是0，开始对欧氏距离进行聚类计算")
+        #logger.info(f"因为binaryArrary:{binaryArrary}全部是0，开始对欧氏距离进行聚类计算")
+        logger.info(f"因为binaryArrary:全部是0，开始对欧氏距离进行聚类计算")
         binaryArrary=k_means_simplify(position)
 
     # #下面实现的是方法2中的第二个方法，随机选取原始数据中的某个值做阈值
@@ -262,7 +338,7 @@ def continuous_to_discreate(position,logger, judgementCriteria=0):
     #             else:
     #                 binaryArrary[i] = 0
 
-    logger.info(f"binaryArrary:{binaryArrary},{type(binaryArrary)}")
+    # logger.info(f"binaryArrary:{binaryArrary},{type(binaryArrary)}")
 
     return binaryArrary
 
@@ -545,14 +621,16 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
     :return:
     """
 
+
+
     # 初始化搜索代理的位置，行数是搜索代理的数量SearchAgents_no，列数是搜索空间的维度dim
     Positions = Initialization(SearchAgents_no, dim, ub, lb)
-    logger.info(f"positons={Positions}")
+    #logger.info(f"positons={Positions}")
     # 生成搜索代理对应的二进制矩阵，因为第一轮矩阵没有对应的前代，无法计算欧氏距离，所以直接转化
     binaryArrary = continuous_to_discreate(Positions,logger, 0)
     # 先进行一遍训练加测试，计算出目标函数以及最好最差
-    train_data, train_target = data_Processing(filename_train)
-    test_data, test_target = data_Processing(filename_test)
+    train_data, train_target = data_Processing_arrhythmia(filename_train)
+    test_data, test_target = data_Processing_arrhythmia(filename_test)
     Fitness = []  # 存储目标函数值的数组
     # 这是整个迭代算法的第一步，方法一可以用全部训练集进行训练，方法二进行特征选择，选择完进行训练
     # 因为要找到最佳和最差代理，所以只能用第二个方法
@@ -576,7 +654,7 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
         logger.info(f"feature_number={train_data_selected.shape[1]}")
         logger.info(f"error_rate={error_rate}")
 
-    logger.info(f"Fitness={Fitness}")
+    #logger.info(f"Fitness={Fitness}")
     Fitness = np.array(Fitness)
     vMin_idx = np.argmin(Fitness)  # 返回最小值的索引
     vMin = Fitness[vMin_idx]
@@ -588,25 +666,25 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
 
     alphaMelanophore = alpha_melanophore(Fitness, Fitness[vMin_idx], Fitness[vMax_idx])
     # alphaMelanophore注定会有一个1一个0,1是fit[i]取到min，0是fit[i]取到max
-    logger.info(f"alphaMelanophore={alphaMelanophore}")
+    #logger.info(f"alphaMelanophore={alphaMelanophore}")
     # 下列大循环就是迭代过程
     for t in range(1, Max_iter + 1):
         # 这个小循环每次迭代过程中，每个搜索代理进行的算法计算
         logger.info(f"第{t}轮迭代中")
         for r in range(SearchAgents_no):
-            logger.info(f"第{r + 1}个代理")
+            #logger.info(f"第{r + 1}个代理")
             if np.random.rand() > 0.5:  # 50%的概率，执行伪装策略或者血液射击与随机行走策略
                 v = mimicry(theBestVct, Positions, Max_iter, SearchAgents_no, t)
-                logger.info(f"进入了伪装策略")
+                #logger.info(f"进入了伪装策略")
             else:
                 if t % 2 == 0:  # 若迭代次数是偶数，执行血液射击策略
                     v = shootBloodstream(theBestVct, Positions[r, :], Max_iter, t)
-                    logger.info(f"执行了血液射击策略")
+                    #logger.info(f"执行了血液射击策略")
                 else:  # 若迭代次数是奇数，执行随机行走策略
                     v = randomWalk(theBestVct, Positions[r, :])
-                    logger.info(f"执行了随机行走策略")
+                    #logger.info(f"执行了随机行走策略")
             Positions[vMax_idx, :] = Skin_darkening_or_lightening(theBestVct, Positions, SearchAgents_no)
-            logger.info(f"最差是第{vMax_idx + 1}个代理，执行皮肤变化策略")
+            #logger.info(f"最差是第{vMax_idx + 1}个代理，执行皮肤变化策略")
             if alphaMelanophore[r] <= 0.3:
                 # print(f"第{r+1}个alphaMelanophore值是{alphaMelanophore[r]}，执行替换逃离策略")
                 v = remplaceSearchAgent(theBestVct, Positions, SearchAgents_no)
@@ -616,7 +694,8 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
             # 接下来计算新的搜索代理的适应度函数
             # print(v)
             # 先将得到的新代理二进制化，这个临界值有待商榷
-            logger.info(f"第{t}轮迭代中的，第{r + 1}个代理是：{v}")
+
+            #logger.info(f"第{t}轮迭代中的，第{r + 1}个代理是：{v}")
 
             # 下面代码计算欧氏距离并转换二进制版本
             v_euclideanDistance = euclideanDistance(v, Positions[r, :],logger)
@@ -654,8 +733,8 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
             logger.info(f"feature_number={train_data_selected.shape[1]}")
             logger.info(f"error_rate={error_rate}")
             logger.info(f"fnew={Fnew}")
-            logger.info(f"Fitness={Fitness}")
-            logger.info('   ')
+            #logger.info(f"Fitness={Fitness}")
+            #logger.info('   ')
 
         vMax_idx = np.argmax(Fitness)
         alphaMelanophore = alpha_melanophore(Fitness, vMin, Fitness[vMax_idx])
@@ -663,21 +742,41 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
 
     logger.info(f"Convergence_curve={Convergence_curve}")
     logger.info(f"vMin={vMin}")
-    logger.info(f"theBestVct={theBestVct}")
+    #logger.info(f"theBestVct={theBestVct}")
 
     return vMin, theBestVct, Convergence_curve
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO,
-                        filename='实验记录.txt',
-                        filemode='w',
-                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    # logging.basicConfig(level=logging.INFO,
+    #                     filename='实验记录.txt',
+    #                     filemode='w',
+    #                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    # logger = logging.getLogger(__name__)
+    # console_handler = logging.StreamHandler()
+    # console_handler.setLevel(logging.INFO)
+    # formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
+    # console_handler.setFormatter(formatter)
+    # logger.addHandler(console_handler)
+
+    # 创建日志记录器
     logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)  # 设置日志级别
+
+    # 创建文件处理器
+    file_handler = logging.FileHandler('实验记录.txt', mode='w')
+    file_handler.setLevel(logging.INFO)
+    # 为文件处理器设置格式化器，不包含日期、时间等前缀
+    file_formatter = logging.Formatter('%(message)s')
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
+
+    # 创建控制台处理器
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
-    console_handler.setFormatter(formatter)
+    # 为控制台处理器设置格式化器，包含日期、时间、模块名和日志级别
+    console_formatter = logging.Formatter('%(asctime)s-%(name)-12s-%(levelname)-8s-%(message)s')
+    console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
 
     ub = np.array([20])
@@ -686,29 +785,20 @@ if __name__ == "__main__":
     # pos2=np.array([[1,1,2],[10,20,30],[5,6,7],[19,20,21]])
     # pos3=np.array([7,6,5,4,3,1])
     # 下面是用knn进行计算的
-    clf = KNeighborsClassifier(n_neighbors=1)
+    # clf = KNeighborsClassifier(n_neighbors=6)
     # 下面是用决策树进行计算
-    # clf=tree.DecisionTreeClassifier(random_state=0)
-    # 下面是用线性支持向量机
-    # clf=LinearSVC(dual=False,random_state=0)
-    #下面使用朴素贝叶斯高斯模型
-    # clf=GaussianNB()
-    # 下面使用感知器模型
-    # clf=Perceptron(random_state=0)
-    # 下面使用随机森林模型
-    # clf=RandomForestClassifier(min_samples_split=5,min_samples_leaf=10)
+    #clf=RandomForestClassifier(min_samples_split=5,min_samples_leaf=10)
     # 下面使用极端随机树
-    # clf=ExtraTreesClassifier()
+    #clf=ExtraTreesClassifier()
     # 下面使用adaboost模型
-    # clf=AdaBoostClassifier(n_estimators=100,random_state=0)
+    clf=AdaBoostClassifier(n_estimators=100,random_state=0)
     # 下面使用bagging模型
-    # clf=BaggingClassifier(n_estimators=100,random_state=0)
-    for i in range(1):
+    #clf=BaggingClassifier(n_estimators=100,random_state=0)
+
+    name_train, name_test = data_Processing_split('arrhythmia.data', 0.8)
+    for i in range(7):
         logger.info(f"第{i+1}次实验")
-        HLOA(10, 30, lb, ub, 37, 15, 0.99, 'KDDTrain+.csv', 'KDDTest+.csv',logger,clf)
+        HLOA(50, 100, lb, ub, 279, 15, 0.9, name_train, name_test,logger,clf)
 
     # results=continuous_to_discreate(pos3,5)
     # print(f"results:{results}")
-
-
-
