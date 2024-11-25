@@ -1,5 +1,6 @@
 import random
 import os
+import re
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -35,23 +36,43 @@ HLOA算法的二进制版本改进版本1
 以上三个问题，可以在该版本中进行尝试实现，并进行结果实验
 """
 
+def data_Processing_allData(filename):
+    """
+    用来读取一个完整的数据，以csv文件的形式保存下来
+    :param filename: 需要拆分的文件名
+    :return: 返回传入比例的数据名称
+    """
+    df=pd.read_csv(filename)
+    print(df)
+    # 随机打乱DataFrame的行
+    #df = df.sample(frac=1).reset_index(drop=True)
+
+    filename_without_ext = os.path.splitext(filename)[0]
+    name_file=f"{filename_without_ext}.csv"
+    df.to_csv(name_file,index=False)
+    return name_file
+
 def data_Processing_split(filename,trainProportion=0.8):
     """
     用来将一个完整的数据，按照输入的比例，分成两份数据，并以csv文件的形式保存下来
     :param filename: 需要拆分的文件名
-    :param trainProportion: 拆分的训练集数据的比例
-    :return: 返回训练集+测试集的名字
+    :param trainProportion: 需要返回的第一份数据的占比
+    :return: 返回传入比例的数据名称，以及（1-比例）的数据名称
     """
     df=pd.read_csv(filename)
+
+    # 随机打乱DataFrame的行
+    #df = df.sample(frac=1).reset_index(drop=True)
+
     split_index=int(len(df)*trainProportion)
-    train_df=df.iloc[:split_index]
-    test_df=df.iloc[split_index:]
+    proportion_df=df.iloc[:split_index]
+    other_df=df.iloc[split_index:]
     filename_without_ext = os.path.splitext(filename)[0]
-    name_train=f"{filename_without_ext}_train.csv"
-    name_test=f"{filename_without_ext}_test.csv"
-    train_df.to_csv(name_train,index=False)
-    test_df.to_csv(name_test, index=False)
-    return name_train,name_test
+    name_proportion=f"{filename_without_ext}_proportion.csv"
+    name_other=f"{filename_without_ext}_other.csv"
+    proportion_df.to_csv(name_proportion,index=False)
+    other_df.to_csv(name_other, index=False)
+    return name_proportion,name_other
 
 def data_Processing_NSL_KDD(filename):
     """
@@ -137,6 +158,417 @@ def data_Processing_arrhythmia(filename):
     print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
     # print(df_data)
     # print(df_target)
+    return df_data, df_target
+
+def data_Processing_breast_cancer_wisconsin(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限breast_cancer_wisconsin数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename,header=None)
+    #df.to_csv("处理之前.csv", index=False)
+
+    #df['is_abnormal'] = (df['data_column'] == '?').astype(int)#创建一个新列来标记异常值：1表示异常，0表示正常
+
+    # 遍历每一列，替换非数值数据为NaN
+    for column in df.columns:
+        df[column] = pd.to_numeric(df[column], errors='coerce')
+
+    for col in df.columns:
+        # print(df[col])
+        mean_value = df[col].mean()  #计算当前列的平均值，忽略NaN
+        # print(mean_value)
+        df[col].fillna(mean_value, inplace=True)  #替换NaN值为平均值
+
+    df_data = df.iloc[:, 1:-1]
+    df_targetNonnumerical = df.iloc[:, -1]  # 选取所有行的最后一列，
+    standard = 2
+    df_targetNumerical = []
+    for i in range(len(df_targetNonnumerical)):
+        if df_targetNonnumerical[i] == standard:
+            df_targetNumerical.append(1)
+        elif df_targetNonnumerical[i] != standard:
+            df_targetNumerical.append(0)
+    df_target = df_targetNumerical
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    #print(df_data)
+    #print(df_target)
+    return df_data, df_target
+
+def data_Processing_breast_cancer_wisconsin_diagnostic(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限breast_cancer_wisconsin_diagnostic数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename,header=None)
+
+    # 遍历每一列，替换非数值数据为NaN
+    # for column in df.columns:
+    #     df[column] = pd.to_numeric(df[column], errors='coerce')
+    #
+    # for col in df.columns:
+    #     mean_value = df[col].mean()  #计算当前列的平均值，忽略NaN
+    #     df[col].fillna(mean_value, inplace=True)  #替换NaN值为平均值
+
+    df_data = df.iloc[:, 2:]
+    df_targetNonnumerical = df.iloc[:, 1]
+    standard = 'M'
+    df_targetNumerical = []
+    for i in range(len(df_targetNonnumerical)):
+        if df_targetNonnumerical[i] == standard:
+            df_targetNumerical.append(1)
+        elif df_targetNonnumerical[i] != standard:
+            df_targetNumerical.append(0)
+    df_target = df_targetNumerical
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    # print(df_data)
+    # print(df_target)
+    return df_data, df_target
+
+def data_Processing_german(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限german.data-numeric数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename,header=None)
+    #先将塞在一格的数据拆分出来，处理成程序能处理的格式
+    number_list=[]
+    for index,row in df.iterrows():
+        #将每列数据中的空格用正则规则消除，只留下数字
+        numbers=[int(num) for num in re.findall(r'\b\d+\b',row[0])]
+        number_list.append(numbers)
+    df=pd.DataFrame(number_list)
+    df_data = df.iloc[:, :-1]
+    df_targetNonnumerical = df.iloc[:, -1]
+    #print(f"df_data:{df_data}")
+    #print(f"df_targetNonnumerical:{df_targetNonnumerical}")
+    standard =2
+    df_targetNumerical = []
+    for i in range(len(df_targetNonnumerical)):
+        if df_targetNonnumerical[i] == standard:
+            df_targetNumerical.append(1)
+        elif df_targetNonnumerical[i] != standard:
+            df_targetNumerical.append(0)
+    df_target = df_targetNumerical
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    # print(df_data)
+    # print(df_target)
+    return df_data, df_target
+
+def data_Processing_ionosphere(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限ionosphere数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename,header=None)
+
+    df_data = df.iloc[:, :-1]
+    #处理数据里的非数值数据，将其处理成模型可以训练和预测的数据类型
+    for index,row in df_data.iterrows():
+        #这个循环的目的是将有多个小数点“.”的数据，只保留第二个小数点的前面的值
+        #检查csv文件，异常数据集中在第10行，所以直接用10，如果不确定的话，还需要逐行逐个检查
+        value=df_data.at[index,10]
+        if isinstance(value, str):
+            second_dot_index=value.find('.',value.find('.')+1)
+            if second_dot_index!=-1:
+                clean_value=value[:second_dot_index]
+            else:
+                clean_value=value
+            df_data.at[index,10]=clean_value
+
+    #将非数值的数据转化为数值数据
+    df_data[10] = df_data[10].astype(float)
+
+    df_targetNonnumerical = df.iloc[:, -1]  # 选取所有行的最后一列，
+    standard = 'g'
+    df_targetNumerical = []
+    for i in range(len(df_targetNonnumerical)):
+        if df_targetNonnumerical[i] == standard:
+            df_targetNumerical.append(1)
+        elif df_targetNonnumerical[i] != standard:
+            df_targetNumerical.append(0)
+    df_target = df_targetNumerical
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    #np.set_printoptions(threshold=np.inf) #打印全部数据，中间不要用省略号“……”
+    # print(df_data)
+    # print(df_target)
+    return df_data, df_target
+
+def data_Processing_waveform_noise(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限waveform_noise数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename,header=None)
+
+    df_data = df.iloc[:, :-1]
+    df_targetNonnumerical = df.iloc[:, -1]  # 选取所有行的最后一列，
+    # standard = 1
+    # df_targetNumerical = []
+    # for i in range(len(df_targetNonnumerical)):
+    #     if df_targetNonnumerical[i] == standard:
+    #         df_targetNumerical.append(1)
+    #     elif df_targetNonnumerical[i] != standard:
+    #         df_targetNumerical.append(0)
+    #df_target = df_targetNumerical
+    df_target=df_targetNonnumerical
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    # print(df_data)
+    # print(df_target)
+    return df_data, df_target
+
+def data_Processing_semeion(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限semeion.data数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename,usecols=[0],header=None)
+    #先将塞在一格的数据拆分出来，处理成程序能处理的格式
+    number_list=[]
+    #遍历df中的每一行
+    for index,row in df.iterrows():
+        #第一列数据是用空格分隔的字符串
+        first_column_str=row[0]
+        #分隔字符串并转换为浮点数列表
+        values=list(map(float,first_column_str.split()))
+        #将列表添加到number_list中
+        number_list.append(values)
+    df=pd.DataFrame(number_list)
+    df_data = df.iloc[:, :-10]
+    df_targetNonnumerical = df.iloc[:, -10:]
+
+    #在这将target的十列处理成一列，也就是把onehot编码变成整数
+    new_target=[]#初始化一个新列表，用来存放变成的整数编码
+    for index,row in df_targetNonnumerical.iterrows():
+        for i, bit in enumerate(row, start=1):
+            if bit == 1:
+                new_target.append(11-i)
+
+    # print(f"df_data:{df_data}")
+    # print(f"df_targetNonnumerical:{df_targetNonnumerical}")
+    df_target = new_target
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    # np.set_printoptions(threshold=np.inf) #打印全部数据，中间不要用省略号“……”
+    # print(df_data)
+    # print(df_target)
+    return df_data, df_target
+
+def data_Processing_heart(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限heart.dat数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename,usecols=[0],header=None)
+    #先将塞在一格的数据拆分出来，处理成程序能处理的格式
+    number_list=[]
+    #遍历df中的每一行
+    for index,row in df.iterrows():
+        #第一列数据是用空格分隔的字符串
+        first_column_str=row[0]
+        #分隔字符串并转换为浮点数列表
+        values=list(map(float,first_column_str.split()))
+        #将列表添加到number_list中
+        number_list.append(values)
+    df=pd.DataFrame(number_list)
+    df_data = df.iloc[:, :-1]
+    df_targetNonnumerical = df.iloc[:, -1]
+
+
+    # print(f"df_data:{df_data}")
+    # print(f"df_targetNonnumerical:{df_targetNonnumerical}")
+    df_target = df_targetNonnumerical
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    # np.set_printoptions(threshold=np.inf) #打印全部数据，中间不要用省略号“……”
+    #print(df_data)
+    #print(df_target)
+    return df_data, df_target
+
+def data_Processing_libras(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限movement_libras.data数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename, header=None)
+
+    #对数据中的非法数据进行处理，例如两个小数点的数据，对第二个小数点以及其后的数据进行舍弃
+    data_list=df.values.tolist()#转成普通列表
+    for row_index,row in enumerate(data_list):
+        for col_index,element in enumerate(row):
+            if type(element)==str:#遍历，然后对str类型的数据进行处理
+                parts = element.split(".")
+                new_data = ".".join(parts[: - 1])
+                if new_data!='0':#防止属于str类型的但只有一个小数点的数据被误处理
+                    data_list[row_index][col_index]=new_data
+
+    df=pd.DataFrame(data_list)
+    df=df.astype(float)
+
+    df_data = df.iloc[:, :-1]
+    df_targetNonnumerical = df.iloc[:, -1]  # 选取所有行的最后一列，
+
+    # df_targetNumerical = []
+    # for i in range(len(df_targetNonnumerical)):#对标签栏中的数据做归类处理，偶数为0，奇数为1
+    #     if df_targetNonnumerical[i]/2 == 0:
+    #         df_targetNumerical.append(0)
+    #     elif df_targetNonnumerical[i]/2 != 0:
+    #         df_targetNumerical.append(1)
+
+    df_target = df_targetNonnumerical
+
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    # np.set_printoptions(threshold=np.inf) #打印全部数据，中间不要用省略号“……”
+    #print(df_data)
+    #print(df_target)
+    return df_data, df_target
+
+def data_Processing_parkinsons(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限parkinsons.data数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename, header=None)
+    df=df.iloc[1:,1:]
+    df=df.astype(float)
+
+    df_data1 = df.iloc[:, :16]
+    df_targetNonnumerical = df.iloc[:, 16]  # 选取所有行的最后一列，
+    df_data2=df.iloc[:,17:]
+
+    df_data=pd.concat([df_data1,df_data2],axis=1)#对两个列表进行拼接
+    df_target = df_targetNonnumerical
+
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    # np.set_printoptions(threshold=np.inf) #打印全部数据，中间不要用省略号“……”
+    print(df_data)
+    print(df_target)
+    return df_data, df_target
+
+def data_Processing_sonar(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限sonar.all-data数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename,header=None)
+
+    df_data = df.iloc[:, :-1]
+    df_targetNonnumerical = df.iloc[:, -1]  # 选取所有行的最后一列，
+    standard = 'R'
+    df_targetNumerical = []
+    for i in range(len(df_targetNonnumerical)):
+        if df_targetNonnumerical[i] == standard:
+            df_targetNumerical.append(1)
+        elif df_targetNonnumerical[i] != standard:
+            df_targetNumerical.append(0)
+    df_target=df_targetNumerical
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    #print(df_data)
+    #print(df_target)
+    return df_data, df_target
+
+def data_Processing_spectft(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限spectft数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename,header=None)
+
+    df_data = df.iloc[:, 1:]
+    df_targetNumerical = df.iloc[:, 0]  # 选取所有行的第一列
+    df_target=df_targetNumerical
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    #print(df_data)
+    #print(df_target)
+    return df_data, df_target
+
+
+def data_Processing_ticTacToe(filename):
+    """
+    将原始数据处理成sklearn能用的数据形式，仅限tic-tac-toe数据集，其他数据集格式不对
+    需要重新写代码
+    :param filename: 传入原始数据集
+    :return: data+target,arrary数组
+    """
+    df = pd.read_csv(filename)
+
+    df_data = df.iloc[:, :-1]
+    df_targetNonnumerical = df.iloc[:, -1]  # 选取所有行的第一列
+    #对数据进行处理
+    mapping = {'x': 1, 'o': 2, 'b': 3}
+    for col in df_data.columns:
+        df_data[col] = df_data[col].map(lambda x: mapping.get(x, x))
+
+    standard = 'positive'
+    df_targetNumerical = []
+    for i in range(len(df_targetNonnumerical)):
+        if df_targetNonnumerical[i] == standard:
+            df_targetNumerical.append(1)
+        elif df_targetNonnumerical[i] != standard:
+            df_targetNumerical.append(0)
+
+    df_target=df_targetNumerical
+    # 要把数据处理成sklearn需要的形式
+    df_data = df_data.values
+    df_target = np.array(df_target)
+    print(f"{'数据集：'}{filename}{'，项目文件：HLOA_Binary，函数名：data_Processing'}")
+    #print(df_data)
+    #print(df_target)
     return df_data, df_target
 
 def Initialization(search_agents, dim, ub, lb):
@@ -232,9 +664,101 @@ def k_means_simplify(euclideanDistance):
     #print(binaryArrary)
     return binaryArrary
 
-def continuous_to_discreate(position,logger, judgementCriteria=0):
+def continuous_to_discreate_k_means_simplify(position,logger, judgementCriteria=0):
     """
     生成search_agents行dim列的二进制数组，且其数据是根据对应种群生成
+    种群大于judgementCriteria为1小于为0
+    特征选择向量出现全零情况之后，进行一个小的聚类计算
+    :param position:种群矩阵，或者欧式距离矩阵
+    :param logger:日志记录logger函数
+    :param judgementCriteria:比其小则取0，大则取1，默认值是0
+    :return:返回一个离散矩阵，尺寸和position对应
+    """
+
+    if position.ndim == 2:
+        binaryArrary = np.zeros((position.shape[0], position.shape[1]))
+        for i in range(position.shape[0]):
+            for j in range(position.shape[1]):
+                if position[i, j] >= judgementCriteria:
+                    binaryArrary[i, j] = 1
+                else:
+                    binaryArrary[i, j] = 0
+    elif position.ndim == 1:
+        binaryArrary = np.zeros((len(position)))
+        for i in range(len(position)):
+            if position[i] >= judgementCriteria:
+                binaryArrary[i] = 1
+            else:
+                binaryArrary[i] = 0
+
+    #下面实现的是方法2中的第一个方法,对欧氏距离使用聚类k-means，k=2的思路做一个简单的二分类
+    if (binaryArrary == 0).all():
+        #logger.info(f"因为binaryArrary:{binaryArrary}全部是0，开始对欧氏距离进行聚类计算")
+        logger.info(f"因为binaryArrary:全部是0，开始对欧氏距离进行聚类计算")
+        binaryArrary=k_means_simplify(position)
+
+    return binaryArrary
+
+def continuous_to_discreate_random_choice(position,logger, judgementCriteria=0):
+    """
+    生成search_agents行dim列的二进制数组，且其数据是根据对应种群生成
+    种群大于judgementCriteria为1小于为0
+    特征选择向量出现全零情况之后，从position矩阵中随机选择一个数值作为新的阈值重新计算
+    :param position:种群矩阵，或者欧式距离矩阵
+    :param logger:日志记录logger函数
+    :param judgementCriteria:比其小则取0，大则取1，默认值是0
+    :return:返回一个离散矩阵，尺寸和position对应
+    """
+
+    if position.ndim == 2:
+        binaryArrary = np.zeros((position.shape[0], position.shape[1]))
+        for i in range(position.shape[0]):
+            for j in range(position.shape[1]):
+                if position[i, j] >= judgementCriteria:
+                    binaryArrary[i, j] = 1
+                else:
+                    binaryArrary[i, j] = 0
+    elif position.ndim == 1:
+        binaryArrary = np.zeros((len(position)))
+        for i in range(len(position)):
+            if position[i] >= judgementCriteria:
+                binaryArrary[i] = 1
+            else:
+                binaryArrary[i] = 0
+
+    #下面实现的是方法2中的第二个方法，随机选取原始数据中的某个值做阈值
+    if (binaryArrary == 0).all():
+        logger.info(f"因为binaryArrary全部是0，随机选取原始数据中的某个值作为阈值，重新进行向量生成")
+        if position.ndim == 2:
+            judgementCriteria=random.choice(random.choice(position))
+            # print(f"维度2")
+            # print(f"new_judgementCriteria:{judgementCriteria}")
+            binaryArrary = np.zeros((position.shape[0], position.shape[1]))
+            for i in range(position.shape[0]):
+                for j in range(position.shape[1]):
+                    if position[i, j] >= judgementCriteria:
+                        binaryArrary[i, j] = 1
+                    else:
+                        binaryArrary[i, j] = 0
+        elif position.ndim == 1:
+            judgementCriteria = random.choice(position)
+            # print(f"维度1")
+            # print(f"new_judgementCriteria:{judgementCriteria}")
+            binaryArrary = np.zeros((len(position)))
+            for i in range(len(position)):
+                if position[i] >= judgementCriteria:
+                    binaryArrary[i] = 1
+                else:
+                    binaryArrary[i] = 0
+
+    return binaryArrary
+
+def continuous_to_discreate_midia_chioce(position,logger, judgementCriteria=0):
+    """
+    生成search_agents行dim列的二进制数组，且其数据是根据对应种群生成
+    种群大于judgementCriteria为1小于为0
+    特征选择向量出现全零情况之后，从position矩阵中计算中位数作为新的阈值重新计算
+
     在这一部分，对特征选择向量出现全零情况之后的处理步骤进行优化
     方法1：抛弃该次迭代，重新计算，直到特性选择向量不再出现全零的情况
     方法2：用另一套标准进行计算，算出一个新的特征选择向量
@@ -282,66 +806,34 @@ def continuous_to_discreate(position,logger, judgementCriteria=0):
             else:
                 binaryArrary[i] = 0
 
-    #下面实现的是方法2中的第一个方法,对欧氏距离使用聚类k-means，k=2的思路做一个简单的二分类
+    #下面实现的是方法2中的第二个方法，使用原始数据中的中位数做阈值
     if (binaryArrary == 0).all():
-        #logger.info(f"因为binaryArrary:{binaryArrary}全部是0，开始对欧氏距离进行聚类计算")
-        logger.info(f"因为binaryArrary:全部是0，开始对欧氏距离进行聚类计算")
-        binaryArrary=k_means_simplify(position)
+        logger.info(f"因为binaryArrary全部是0，选取原始数据中的中位数做阈值，重新进行向量生成")
+        if position.ndim == 2:
+            judgementCriteria=np.median(position)
+            logger.info(f"维度2")
+            # print(f"new_judgementCriteria:{judgementCriteria}")
+            binaryArrary = np.zeros((position.shape[0], position.shape[1]))
+            for i in range(position.shape[0]):
+                for j in range(position.shape[1]):
+                    if position[i, j] >= judgementCriteria:
+                        binaryArrary[i, j] = 1
+                    else:
+                        binaryArrary[i, j] = 0
+        elif position.ndim == 1:
+            judgementCriteria = np.median(position)
+            # print(f"维度1")
+            # print(f"new_judgementCriteria:{judgementCriteria}")
+            binaryArrary = np.zeros((len(position)))
+            for i in range(len(position)):
+                if position[i] >= judgementCriteria:
+                    binaryArrary[i] = 1
+                else:
+                    binaryArrary[i] = 0
 
-    # #下面实现的是方法2中的第二个方法，随机选取原始数据中的某个值做阈值
-    # if (binaryArrary == 0).all():
-    #     logger.info(f"因为binaryArrary:{binaryArrary}全部是0，随机选取原始数据中的某个值作为阈值，重新进行向量生成")
-    #     if position.ndim == 2:
-    #         judgementCriteria=random.choice(random.choice(position))
-    #         # print(f"维度2")
-    #         # print(f"new_judgementCriteria:{judgementCriteria}")
-    #         binaryArrary = np.zeros((position.shape[0], position.shape[1]))
-    #         for i in range(position.shape[0]):
-    #             for j in range(position.shape[1]):
-    #                 if position[i, j] >= judgementCriteria:
-    #                     binaryArrary[i, j] = 1
-    #                 else:
-    #                     binaryArrary[i, j] = 0
-    #     elif position.ndim == 1:
-    #         judgementCriteria = random.choice(position)
-    #         # print(f"维度1")
-    #         # print(f"new_judgementCriteria:{judgementCriteria}")
-    #         binaryArrary = np.zeros((len(position)))
-    #         for i in range(len(position)):
-    #             if position[i] >= judgementCriteria:
-    #                 binaryArrary[i] = 1
-    #             else:
-    #                 binaryArrary[i] = 0
-
-    # #下面实现的是方法2中的第二个方法，使用原始数据中的中位数做阈值
-    # if (binaryArrary == 0).all():
-    #     logger.info(f"因为binaryArrary:{binaryArrary}全部是0，选取原始数据中的中位数做阈值，重新进行向量生成")
-    #     if position.ndim == 2:
-    #         judgementCriteria=np.median(position)
-    #         logger.info(f"维度2")
-    #         # print(f"new_judgementCriteria:{judgementCriteria}")
-    #         binaryArrary = np.zeros((position.shape[0], position.shape[1]))
-    #         for i in range(position.shape[0]):
-    #             for j in range(position.shape[1]):
-    #                 if position[i, j] >= judgementCriteria:
-    #                     binaryArrary[i, j] = 1
-    #                 else:
-    #                     binaryArrary[i, j] = 0
-    #     elif position.ndim == 1:
-    #         judgementCriteria = np.median(position)
-    #         # print(f"维度1")
-    #         # print(f"new_judgementCriteria:{judgementCriteria}")
-    #         binaryArrary = np.zeros((len(position)))
-    #         for i in range(len(position)):
-    #             if position[i] >= judgementCriteria:
-    #                 binaryArrary[i] = 1
-    #             else:
-    #                 binaryArrary[i] = 0
-
-    # logger.info(f"binaryArrary:{binaryArrary},{type(binaryArrary)}")
+    logger.info(f"binaryArrary:{binaryArrary},{type(binaryArrary)}")
 
     return binaryArrary
-
 
 def modified_formula(positions):
     """
@@ -604,7 +1096,7 @@ def feature_selection(binaryArray_row, train_data):
     return feature_selected
 
 
-def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_train, filename_test,logger,clf):
+def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_train, filename_test,logger,clf,dataprocessfuncion):
     """
     实现角蜥蜴优化算法
     :param SearchAgents_no:搜索代理的数量
@@ -618,19 +1110,21 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
     :param filename_test:用到的测试集
     :param logger:记录的logger函数
     :param clf:传入的训练和预测使用的模型
+    :param dataprocessfuncion:数据处理函数
     :return:
     """
-
-
 
     # 初始化搜索代理的位置，行数是搜索代理的数量SearchAgents_no，列数是搜索空间的维度dim
     Positions = Initialization(SearchAgents_no, dim, ub, lb)
     #logger.info(f"positons={Positions}")
     # 生成搜索代理对应的二进制矩阵，因为第一轮矩阵没有对应的前代，无法计算欧氏距离，所以直接转化
-    binaryArrary = continuous_to_discreate(Positions,logger, 0)
+    binaryArrary = continuous_to_discreate_random_choice(Positions,logger, 0)
     # 先进行一遍训练加测试，计算出目标函数以及最好最差
-    train_data, train_target = data_Processing_arrhythmia(filename_train)
-    test_data, test_target = data_Processing_arrhythmia(filename_test)
+    train_data, train_target = dataprocessfuncion(filename_train)
+    test_data, test_target = dataprocessfuncion(filename_test)
+    error_rate_min=1 #用来存储最小的错误率
+    error_rate_fnew=1#用来存储最佳适应度函数对应的错误率
+    feature_number_fnew=0#用来存储最佳适应度函数对应的特征选择数量
     Fitness = []  # 存储目标函数值的数组
     # 这是整个迭代算法的第一步，方法一可以用全部训练集进行训练，方法二进行特征选择，选择完进行训练
     # 因为要找到最佳和最差代理，所以只能用第二个方法
@@ -653,6 +1147,8 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
         Fitness.append(fitness(row, error_rate, a, 1 - a))
         logger.info(f"feature_number={train_data_selected.shape[1]}")
         logger.info(f"error_rate={error_rate}")
+        if error_rate_min>error_rate:
+            error_rate_min=error_rate
 
     #logger.info(f"Fitness={Fitness}")
     Fitness = np.array(Fitness)
@@ -699,7 +1195,7 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
 
             # 下面代码计算欧氏距离并转换二进制版本
             v_euclideanDistance = euclideanDistance(v, Positions[r, :],logger)
-            v_binary = continuous_to_discreate(v_euclideanDistance,logger, judgementCriteria)
+            v_binary = continuous_to_discreate_random_choice(v_euclideanDistance,logger, judgementCriteria)
 
             # 下面代码利用sigmoid函数转化二进制版本
             # v_binary=continuous_to_discreate(v,0)
@@ -729,6 +1225,11 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
             if Fnew <= vMin:
                 theBestVct = v
                 vMin = Fnew
+                error_rate_fnew=error_rate
+                feature_number_fnew=train_data_selected.shape[1]
+
+            if error_rate_min > error_rate:
+                error_rate_min = error_rate
 
             logger.info(f"feature_number={train_data_selected.shape[1]}")
             logger.info(f"error_rate={error_rate}")
@@ -742,9 +1243,11 @@ def HLOA(SearchAgents_no, Max_iter, lb, ub, dim, judgementCriteria, a, filename_
 
     logger.info(f"Convergence_curve={Convergence_curve}")
     logger.info(f"vMin={vMin}")
+    logger.info(f"error_rate_min={error_rate_min}")
+    logger.info(f"error_rate_fnew={error_rate_fnew}")
     #logger.info(f"theBestVct={theBestVct}")
 
-    return vMin, theBestVct, Convergence_curve
+    return error_rate_fnew,error_rate_min,feature_number_fnew
 
 
 if __name__ == "__main__":
@@ -785,20 +1288,48 @@ if __name__ == "__main__":
     # pos2=np.array([[1,1,2],[10,20,30],[5,6,7],[19,20,21]])
     # pos3=np.array([7,6,5,4,3,1])
     # 下面是用knn进行计算的
-    # clf = KNeighborsClassifier(n_neighbors=6)
-    # 下面是用决策树进行计算
-    #clf=RandomForestClassifier(min_samples_split=5,min_samples_leaf=10)
+    #clf = KNeighborsClassifier(n_neighbors=5)
+    # 下面是用随机森林进行计算
+    clf=RandomForestClassifier(min_samples_split=5,min_samples_leaf=10)
     # 下面使用极端随机树
     #clf=ExtraTreesClassifier()
     # 下面使用adaboost模型
-    clf=AdaBoostClassifier(n_estimators=100,random_state=0)
+    #clf=AdaBoostClassifier(n_estimators=100,random_state=0)
     # 下面使用bagging模型
-    #clf=BaggingClassifier(n_estimators=100,random_state=0)
+    #clf=BaggingClassifier(n_estimators=100,random_state=0min_samples_split=5,min_samples_leaf=10)
 
-    name_train, name_test = data_Processing_split('arrhythmia.data', 0.8)
-    for i in range(7):
-        logger.info(f"第{i+1}次实验")
-        HLOA(50, 100, lb, ub, 279, 15, 0.9, name_train, name_test,logger,clf)
+    #取前80%做训练集，后20%做测试集
+    name_train, name_test = data_Processing_split('breast-cancer-wisconsin-diagnostic.data', 0.8)
+    # 取前20%做测试集，后80%做训练集
+    #name_test, name_train = data_Processing_split('ionosphere.data', 0.2)
+    #读取全部文件内容，并返回文件名称
+    #name_file=data_Processing_allData('SPECTF.train')
+    error_rate_fnew_list=[]
+    error_rate_min_list=[]
+    feature_number_fnew_list=[]
+    for i in range(10):
+        logger.info(f"第{i + 31}次实验")
+        """
+        每次更改数据集的时候，需要修改的函数:
+        1、data_Processing_split（）中的数据集名称
+        2、HLOA中的dim改成对应数据集的纬度，clf改成你需要进行测试的模型，
+            data_Processing_改成对应数据集的处理函数
+        3、如果要更换局部最优解的搜索转换方式，需要更换HLOA中的continuous_to_discreate函数，
+            将其更换为对应转换函数方式
+        """
+        error_rate_fnew,error_rate_min,feature_number_fnew=HLOA(50, 100, lb, ub, 30, 15, 0.9,name_train ,name_test,logger,clf,data_Processing_breast_cancer_wisconsin_diagnostic)
 
+        error_rate_fnew_list.append(error_rate_fnew)
+        error_rate_min_list.append(error_rate_min)
+        feature_number_fnew_list.append(feature_number_fnew)
+    average_error_rate_fnew=sum(error_rate_fnew_list)/len(error_rate_fnew_list)
+    average_error_rate_min = sum(error_rate_min_list) / len(error_rate_min_list)
+    average_feature_number_fnew=sum(feature_number_fnew_list) / len(feature_number_fnew_list)
+    logger.info(f"error_rate_fnew_list={error_rate_fnew_list}")
+    logger.info(f"error_rate_min_list={error_rate_min_list}")
+    logger.info(f"feature_number_fnew_list={feature_number_fnew_list}")
+    logger.info(f"average_error_rate_fnew={average_error_rate_fnew}")
+    logger.info(f"average_error_rate_min={average_error_rate_min}")
+    logger.info(f"average_feature_number_fnew={average_feature_number_fnew}")
     # results=continuous_to_discreate(pos3,5)
     # print(f"results:{results}")
